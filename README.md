@@ -1,8 +1,10 @@
 # AI Chat Bot Demo
 
+<!-- Optional: add badges after publishing the repo
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Node 20+](https://img.shields.io/badge/node-20+-green.svg)](https://nodejs.org/)
+-->
 
 A chatbot application with pluggable LLM backends (Claude, OpenAI, Ollama), Auth0 authentication, MCP server integration with OAuth, **optional Auth0 FGA / OpenFGA** for order permissions, optional **CIBA** step-up for high-risk actions, and **SQLite** conversation history.
 
@@ -21,7 +23,7 @@ git add .
 git status   # confirm .env / .env.local / .venv / node_modules are NOT listed
 git commit -m "Initial commit"
 git branch -M main
-git remote add origin https://github.com/intheorysecurity/auth0_ai_chat_bot_demo.git
+git remote add origin https://github.com/<you>/<repo>.git
 git push -u origin main
 ```
 
