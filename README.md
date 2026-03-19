@@ -15,25 +15,9 @@ A chatbot application with pluggable LLM backends (Claude, OpenAI, Ollama), Auth
 | **Contributing** | [CONTRIBUTING.md](CONTRIBUTING.md) · [Security](SECURITY.md) · [Code of conduct](CODE_OF_CONDUCT.md) |
 | **License** | [MIT](LICENSE) |
 
-## Publish to a new Git repository
+## Preview
 
-```bash
-git init
-git add .
-git status   # confirm .env / .env.local / .venv / node_modules are NOT listed
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/<you>/<repo>.git
-git push -u origin main
-```
-
-Never commit real secrets. Use only `*.example` env templates in git.
-
-## Preview (placeholder)
-
-Replace with your own screenshots—see [`docs/images/README.md`](docs/images/README.md).
-
-![UI placeholder](docs/images/placeholder.svg)
+![UI placeholder](docs/images/home.png)
 
 ## Table of contents
 
@@ -101,18 +85,23 @@ OLLAMA_BASE_URL=http://localhost:11434    # default Ollama address
 # Persistence (conversations)
 DATABASE_URL=sqlite:///./app.db
 
-# Optional: Auth0 FGA / OpenFGA (see README section "Auth0 FGA (Fine-Grained Authorization)")
-# FGA_API_URL=https://api.us1.fga.dev
+# Optional: Auth0 CIBA (high-value chat orders — see README "Optional: CIBA step-up")
+# AUTH0_ISSUER_URL=https://your-tenant.us.auth0.com/
+# AUTH0_CIBA_CLIENT_ID=...
+# AUTH0_CIBA_CLIENT_SECRET=...
+# AUTH0_CIBA_AUDIENCE=https://api.aichatbot.local
+
+# Optional: Auth0 FGA / OpenFGA (see README "Auth0 FGA")
+# FGA_API_URL=...
 # FGA_STORE_ID=...
 # FGA_MODEL_ID=...
-# FGA_API_TOKEN=...
-# OR client credentials: FGA_API_TOKEN_ISSUER, FGA_API_AUDIENCE, FGA_CLIENT_ID, FGA_CLIENT_SECRET
+# FGA_API_TOKEN=...  (or client credentials — see .env.example)
 
 # App
 FRONTEND_URL=http://localhost:3000
 ```
 
-Full variable list: `backend/.env.example`.
+Full list, including CIBA endpoint overrides and FGA client-credentials: **`backend/.env.example`**.
 
 ### Frontend (`frontend/.env.local`)
 
