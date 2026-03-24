@@ -7,6 +7,17 @@ from app.config import settings
 from app.llm.base import Done, LLMProvider, StreamChunk, TextDelta, ToolCallRequest
 
 
+def _openai_function_parameters(input_schema: dict | None) -> dict:
+    """
+    OpenAI rejects object schemas without a `properties` key (e.g. whoami with no args).
+    Anthropic/Ollama accept `{"type": "object", "additionalProperties": false}` alone.
+    """
+    s = dict(input_schema) if input_schema else {"type": "object"}
+    if s.get("type") == "object" and "properties" not in s:
+        s = {**s, "properties": {}}
+    return s
+
+
 class OpenAIProvider(LLMProvider):
     def __init__(self) -> None:
         self._client = openai.AsyncOpenAI(api_key=settings.openai_api_key)
@@ -28,7 +39,9 @@ class OpenAIProvider(LLMProvider):
                     "function": {
                         "name": t["name"],
                         "description": t.get("description", ""),
-                        "parameters": t.get("input_schema", {"type": "object"}),
+                        "parameters": _openai_function_parameters(
+                            t.get("input_schema", {"type": "object"})
+                        ),
                     },
                 }
                 for t in tools

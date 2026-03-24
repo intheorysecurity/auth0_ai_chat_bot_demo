@@ -10,7 +10,7 @@ A chatbot application with pluggable LLM backends (Claude, OpenAI, Ollama), Auth
 
 | | |
 |--|--|
-| **Docs** | [Documentation index](docs/README.md) · [Architecture](docs/ARCHITECTURE.md) · [Development](docs/DEVELOPMENT.md) · [API overview](docs/API-OVERVIEW.md) |
+| **Docs** | [Documentation index](docs/README.md) · [Architecture](docs/ARCHITECTURE.md) · [Development](docs/DEVELOPMENT.md) · [API overview](docs/API-OVERVIEW.md) · [Changelog](CHANGELOG.md) |
 | **Images** | [Screenshot placeholders](docs/SCREENSHOTS.md) · add assets under [`docs/images/`](docs/images/) |
 | **Contributing** | [CONTRIBUTING.md](CONTRIBUTING.md) · [Security](SECURITY.md) · [Code of conduct](CODE_OF_CONDUCT.md) |
 | **License** | [MIT](LICENSE) |

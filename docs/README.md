@@ -3,6 +3,7 @@
 | Document | Description |
 |----------|-------------|
 | [../README.md](../README.md) | Install, Auth0, FGA, CIBA, project layout |
+| [../CHANGELOG.md](../CHANGELOG.md) | Release notes / notable fixes |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Components, data flow, security boundaries |
 | [DEVELOPMENT.md](DEVELOPMENT.md) | Local dev, Docker, testing, troubleshooting |
 | [API-OVERVIEW.md](API-OVERVIEW.md) | Main HTTP routes (high level) |
