@@ -24,11 +24,19 @@ Protected routes expect `Authorization: Bearer <access_token>` unless noted.
 | POST | `/api/conversations` | Create conversation. |
 | DELETE | `/api/conversations/{id}` | Delete conversation. |
 
-## Simulated commerce (`/api/data`)
+## Catalog images (static, optional)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/data/products` | List products. |
+| GET | `/catalog-assets/{path}` | Files under `backend/app/data/catalogs/assets/` (no auth). Default products use remote image URLs from **`PRODUCT_CATALOG_URL`**. |
+
+## Simulated commerce (`/api/data`)
+
+Products are loaded at startup from **`PRODUCT_CATALOG_URL`** (default Fake Store).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/data/products?limit=` | List products (default limit from env; capped). Response includes `products`, `total`, `returned`. Each row may include `image_url`. |
 | GET | `/api/data/products/{id}` | Product detail. |
 | GET | `/api/data/orders` | List orders (FGA-filtered when configured). |
 | GET | `/api/data/orders/{id}` | Order detail + FGA `can_read`. |

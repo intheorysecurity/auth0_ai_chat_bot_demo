@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.auth.dependencies import get_current_user
 from app.chat.router import router as chat_router
@@ -50,3 +52,11 @@ app.include_router(data_router, prefix="/api/data")
 app.include_router(conversations_router, prefix="/api/conversations")
 app.include_router(ciba_router, prefix="/api/ciba")
 app.include_router(llm_router, prefix="/api/llm")
+
+_catalog_assets = Path(__file__).resolve().parent / "data" / "catalogs" / "assets"
+if _catalog_assets.is_dir():
+    app.mount(
+        "/catalog-assets",
+        StaticFiles(directory=str(_catalog_assets)),
+        name="catalog-assets",
+    )

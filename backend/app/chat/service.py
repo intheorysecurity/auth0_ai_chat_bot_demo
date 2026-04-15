@@ -2,6 +2,7 @@ import json
 import uuid
 from typing import AsyncIterator
 
+from app.config import settings
 from app.llm.base import Done, StreamChunk, TextDelta, ToolCallRequest
 from app.llm.registry import get_provider
 from app.data.service import fake_data
@@ -29,8 +30,28 @@ _RESPONSE_STYLE_HINT = (
     "Reply only with the final answer for the user. "
     "Do not include hidden reasoning, planning, meta-commentary, or phrases like "
     "'The user wants', 'I need to', 'Let me call', or analysis meant for yourself. "
-    "After tools return, summarize briefly in clean markdown; avoid broken tables or filler punctuation."
+    "After tools return, keep prose short unless the user asked for depth. "
+    "Catalog rule (mandatory): If you used list_products or get_product, the client already shows an interactive table "
+    "(thumbnails, ids, prices). Your reply must NOT repeat that data: no markdown tables of products, no row-by-row "
+    "lists of names/prices/stock, no markdown images (![]()), and no pasted product image URLs. "
+    "Do not echo 'Showing X of Y' or restate the tool JSON. "
+    "Reply with at most one or two sentences—e.g. highlight a pattern, offer to drill into one product id, or ask if they want a higher limit."
 )
+
+
+def _append_catalog_followup_nudge(provider_name: str, working_messages: list[dict]) -> None:
+    """After list_products/get_product, remind the model the UI already shows the table (not persisted)."""
+    text = (
+        "The app already shows those products in a table with thumbnails for the user. "
+        "Answer in at most two short sentences. Do not output markdown tables, numbered product lists, "
+        "or any image URLs."
+    )
+    if provider_name == "claude":
+        working_messages.append(
+            {"role": "user", "content": [{"type": "text", "text": text}]}
+        )
+    else:
+        working_messages.append({"role": "user", "content": text})
 
 
 def _inject_tool_routing_hint(messages: list[dict]) -> list[dict]:
@@ -109,7 +130,7 @@ async def chat_stream(
             "name": "list_orders",
             "description": (
                 "List the user's orders from the simulated store. Each order includes product_id, product_name, "
-                "totals, status, buyer_email, company — you usually do NOT need get_product or whoami afterward. "
+                "product_image_url (if set in catalog), totals, status, buyer_email, company — you usually do NOT need get_product or whoami afterward. "
                 "When FGA is configured, only orders the user may read are returned; when FGA is off, all demo orders are visible."
             ),
             "input_schema": {"type": "object", "additionalProperties": False},
@@ -130,21 +151,42 @@ async def chat_stream(
             },
         }
     )
+    _pl_cap = settings.product_list_max_limit
+    _pl_def = settings.product_list_default_limit
     tools.append(
         {
             "name": "list_products",
             "description": (
                 "List products in the catalog (items for sale, SKUs). "
+                f"Returns at most `limit` items (default {_pl_def}, max {_pl_cap}); "
+                "response includes total_products and image_url per row. "
+                "The chat UI renders this as a table—after calling, do not paste a duplicate markdown table or image URLs in chat. "
                 "Do not use for orders or purchase history — use list_orders instead."
             ),
-            "input_schema": {"type": "object", "additionalProperties": False},
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": _pl_cap,
+                        "description": (
+                            f"Max products to return (default {_pl_def}). "
+                            "Increase only if the user asks for a longer list."
+                        ),
+                    },
+                },
+                "additionalProperties": False,
+            },
         }
     )
     tools.append(
         {
             "name": "get_product",
             "description": (
-                "Get one catalog product by id. For order records by id, use get_order instead."
+                "Get one catalog product by id (includes image_url when set in catalog). "
+                "The chat UI shows it in a small table—after calling, do not repeat the row or paste the image URL. "
+                "For order records by id, use get_order instead."
             ),
             "input_schema": {
                 "type": "object",
@@ -318,6 +360,9 @@ async def chat_stream(
                         }
                     )
 
+        if any(tc.tool_name in ("list_products", "get_product") for tc in tool_calls_this_round):
+            _append_catalog_followup_nudge(provider_name, working_messages)
+
 
 async def _execute_tool(
     tc: ToolCallRequest,
@@ -353,7 +398,25 @@ async def _execute_tool(
             return json.dumps({"configured": True, **e.as_dict(), "context": "check_permission"})
 
     if tc.tool_name == "list_products":
-        return json.dumps({"products": fake_data.list_products()})
+        cap = settings.product_list_max_limit
+        default = settings.product_list_default_limit
+        lim_raw = tc.arguments.get("limit")
+        if lim_raw is None:
+            eff = default
+        else:
+            try:
+                eff = int(lim_raw)
+            except (TypeError, ValueError):
+                eff = default
+        eff = min(max(1, eff), cap)
+        rows = fake_data.list_products(limit=eff)
+        return json.dumps(
+            {
+                "products": rows,
+                "total_products": fake_data.product_total_count(),
+                "returned": len(rows),
+            }
+        )
 
     if tc.tool_name == "get_product":
         pid = str(tc.arguments.get("product_id", ""))
@@ -369,6 +432,7 @@ async def _execute_tool(
                 pid = str(o.get("product_id", "") or "")
                 p = fake_data.get_product(pid) if pid else None
                 row["product_name"] = p.get("name") if p else None
+                row["product_image_url"] = (p.get("image_url") or None) if p else None
                 enriched.append(row)
             return json.dumps({"orders": enriched})
         except FgaApiError as e:
@@ -397,7 +461,13 @@ async def _execute_tool(
                         },
                     }
                 )
-        return json.dumps({"order": o})
+        out = dict(o)
+        pid_o = str(o.get("product_id", "") or "")
+        p_enrich = fake_data.get_product(pid_o) if pid_o else None
+        if p_enrich:
+            out["product_name"] = p_enrich.get("name")
+            out["product_image_url"] = p_enrich.get("image_url") or None
+        return json.dumps({"order": out})
 
     if tc.tool_name == "create_order":
         pid = str(tc.arguments.get("product_id", ""))
@@ -444,6 +514,7 @@ async def _execute_tool(
                 "quantity": qty,
                 "total_cents": total,
                 "product_name": p["name"],
+                "product_image_url": p.get("image_url") or None,
                 "poll_interval_sec": poll_iv,
                 "approval_timeout_sec": 60,
                 "message": (
@@ -462,17 +533,22 @@ async def _execute_tool(
             company=company,
             buyer_email=buyer_email,
         )
+        order_out = {
+            **order,
+            "product_name": p["name"],
+            "product_image_url": p.get("image_url") or None,
+        }
         try:
             await ensure_owner_tuple_for_order(user_id, str(order["id"]))
         except FgaApiError as e:
             return json.dumps(
                 {
-                    "order": order,
+                    "order": order_out,
                     "fga_owner": "failed",
                     "fga_owner_tuple_error": e.as_dict(),
                 }
             )
-        return json.dumps({"order": order, "fga_owner": "ok"})
+        return json.dumps({"order": order_out, "fga_owner": "ok"})
 
     if tc.tool_name == "cancel_order":
         oid = str(tc.arguments.get("order_id", ""))

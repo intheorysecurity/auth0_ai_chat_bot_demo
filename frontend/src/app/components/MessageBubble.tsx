@@ -83,13 +83,17 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
                   href={part.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="block"
+                  className={`inline-block ${isUser ? "max-w-full" : "max-w-[11rem]"}`}
                 >
                   <img
                     src={part.url}
                     alt={part.alt || "image"}
                     loading="lazy"
-                    className="max-w-full h-auto rounded-md border border-gray-200 dark:border-gray-600"
+                    className={
+                      isUser
+                        ? "max-w-full h-auto rounded-md border border-gray-200 dark:border-gray-600"
+                        : "w-44 max-w-full h-28 object-cover rounded-md border border-gray-200 dark:border-gray-600"
+                    }
                   />
                 </a>
                 <a

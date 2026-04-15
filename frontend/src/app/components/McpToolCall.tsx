@@ -4,6 +4,12 @@ import { useEffect, useState } from "react";
 import { ToolCallInfo } from "@/lib/hooks/useChat";
 import { getAccessToken } from "@auth0/nextjs-auth0";
 import { apiJson } from "@/lib/api";
+import {
+  ProductDetailToolTable,
+  ProductListToolTable,
+  tryParseGetProductResult,
+  tryParseListProductsResult,
+} from "./ProductCatalogToolView";
 
 interface McpToolCallProps {
   toolCall: ToolCallInfo;
@@ -59,6 +65,15 @@ export default function McpToolCall({ toolCall }: McpToolCallProps) {
 
   const resultText = localResult ?? toolCall.result;
   const badge = toolResultBadge(resultText);
+
+  const listProductsPreview =
+    toolCall.tool_name === "list_products" && resultText
+      ? tryParseListProductsResult(resultText)
+      : null;
+  const getProductPreview =
+    toolCall.tool_name === "get_product" && resultText
+      ? tryParseGetProductResult(resultText)
+      : null;
 
   useEffect(() => {
     if (!resultText) return;
@@ -209,6 +224,20 @@ export default function McpToolCall({ toolCall }: McpToolCallProps) {
 
   return (
     <div className="border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden text-xs">
+      {listProductsPreview ? (
+        <div className="px-3 pt-2 pb-1 bg-white dark:bg-gray-800">
+          <ProductListToolTable
+            products={listProductsPreview.products}
+            total_products={listProductsPreview.total_products}
+            returned={listProductsPreview.returned}
+          />
+        </div>
+      ) : null}
+      {getProductPreview ? (
+        <div className="px-3 pt-2 pb-1 bg-white dark:bg-gray-800">
+          <ProductDetailToolTable product={getProductPreview} />
+        </div>
+      ) : null}
       <button
         onClick={() => setExpanded(!expanded)}
         className="w-full flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-600 hover:bg-gray-100 dark:hover:bg-gray-500 transition-colors text-left"

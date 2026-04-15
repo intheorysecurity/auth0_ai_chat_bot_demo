@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from app.auth.dependencies import get_current_user
+from app.config import settings
 from app.data.service import fake_data
 from app.fga.client import FgaApiError, fga_client
 from app.fga.orders_access import (
@@ -34,8 +35,20 @@ class CreateOrderRequest(BaseModel):
 
 
 @router.get("/products")
-async def list_products(user: dict = Depends(get_current_user)):
-    return {"products": fake_data.list_products()}
+async def list_products(
+    user: dict = Depends(get_current_user),
+    limit: int | None = Query(None, ge=1),
+):
+    cap = settings.product_list_max_limit
+    default = settings.product_list_default_limit
+    eff = min(limit if limit is not None else default, cap)
+    eff = max(1, eff)
+    rows = fake_data.list_products(limit=eff)
+    return {
+        "products": rows,
+        "total": fake_data.product_total_count(),
+        "returned": len(rows),
+    }
 
 
 @router.get("/products/{product_id}")

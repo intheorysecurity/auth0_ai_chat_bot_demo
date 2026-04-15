@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import json
 import time
 import uuid
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+import httpx
+
+from app.config import settings
+
+_CATALOG_DIR = Path(__file__).resolve().parent / "catalogs"
 
 
 @dataclass
@@ -12,6 +20,8 @@ class Product:
     price_cents: int
     inventory_count: int
     tags: list[str]
+    # From remote catalog (e.g. Fake Store `image`); or `/catalog-assets/...` for local files
+    image_url: str = ""
 
 
 @dataclass
@@ -28,6 +38,136 @@ class Order:
     buyer_email: str = ""
 
 
+def _product_from_fakestore_item(item: dict, index: int) -> Product:
+    if not isinstance(item, dict):
+        raise ValueError(f"products[{index}] must be an object")
+    pid_raw = item.get("id")
+    if pid_raw is None:
+        raise ValueError(f"products[{index}] missing id")
+    pid = str(int(pid_raw)) if isinstance(pid_raw, (int, float)) else str(pid_raw).strip()
+    if not pid:
+        raise ValueError(f"products[{index}] missing id")
+
+    title = item.get("title")
+    if title is None or not str(title).strip():
+        raise ValueError(f"products[{pid}] missing title")
+    name = str(title).strip()
+
+    price = item.get("price")
+    if price is None:
+        raise ValueError(f"products[{pid}] missing price")
+    price_cents = int(round(float(price) * 100))
+
+    rating = item.get("rating")
+    if isinstance(rating, dict) and "count" in rating:
+        inventory_count = max(0, int(rating["count"]))
+    else:
+        inventory_count = 100
+
+    category = item.get("category")
+    tags = [str(category).strip()] if category is not None and str(category).strip() else []
+
+    img = item.get("image")
+    image_url = str(img).strip() if img is not None else ""
+
+    return Product(
+        id=pid,
+        name=name,
+        price_cents=price_cents,
+        inventory_count=inventory_count,
+        tags=tags,
+        image_url=image_url,
+    )
+
+
+def _load_seed_orders(raw: dict, products: dict[str, Product]) -> dict[str, Order]:
+    seed = raw.get("seed_orders")
+    if seed is None:
+        return {}
+    if not isinstance(seed, list):
+        raise ValueError("'seed_orders' must be an array when present")
+
+    now = time.time()
+    orders: dict[str, Order] = {}
+    for i, item in enumerate(seed):
+        if not isinstance(item, dict):
+            raise ValueError(f"seed_orders[{i}] must be an object")
+        oid = str(item["id"]).strip()
+        if not oid:
+            raise ValueError(f"seed_orders[{i}] missing id")
+        if oid in orders:
+            raise ValueError(f"Duplicate seed order id: {oid}")
+        pid = str(item["product_id"]).strip()
+        if pid not in products:
+            raise ValueError(
+                f"seed_orders[{oid}] references unknown product_id {pid!r}"
+            )
+        qty = int(item["quantity"])
+        total = item.get("total_cents")
+        if total is None:
+            total = products[pid].price_cents * qty
+        else:
+            total = int(total)
+        created = item.get("created_at")
+        if created is not None:
+            created_at = float(created)
+        else:
+            days = float(item.get("created_days_ago", 0))
+            created_at = now - 86400 * days
+        auth_req = item.get("auth_req_id")
+        orders[oid] = Order(
+            id=oid,
+            product_id=pid,
+            buyer_sub=str(item["buyer_sub"]),
+            status=str(item.get("status", "created")),
+            quantity=qty,
+            total_cents=total,
+            created_at=created_at,
+            auth_req_id=str(auth_req) if auth_req else None,
+            company=str(item.get("company", "") or ""),
+            buyer_email=str(item.get("buyer_email", "") or ""),
+        )
+    return orders
+
+
+def load_catalog_for_settings() -> tuple[dict[str, Product], dict[str, Order]]:
+    url = str(settings.product_catalog_url).strip()
+    if not url:
+        raise ValueError("product_catalog_url / PRODUCT_CATALOG_URL is empty")
+
+    with httpx.Client(timeout=30.0) as client:
+        try:
+            response = client.get(url)
+            response.raise_for_status()
+        except httpx.HTTPError as e:
+            raise RuntimeError(
+                f"Failed to load product catalog from {url!r}: {e}"
+            ) from e
+        data = response.json()
+
+    if not isinstance(data, list) or len(data) == 0:
+        raise ValueError(
+            f"Catalog URL must return a non-empty JSON array; got {type(data).__name__}"
+        )
+
+    products: dict[str, Product] = {}
+    for i, item in enumerate(data):
+        p = _product_from_fakestore_item(item, i)
+        if p.id in products:
+            raise ValueError(f"Duplicate product id: {p.id}")
+        products[p.id] = p
+
+    orders: dict[str, Order] = {}
+    seed_path = _CATALOG_DIR / "seed_orders.json"
+    if seed_path.is_file():
+        raw = json.loads(seed_path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError(f"Catalog seed file {seed_path.name} must be a JSON object")
+        orders = _load_seed_orders(raw, products)
+
+    return products, orders
+
+
 class FakeDataStore:
     def __init__(self) -> None:
         self._products: dict[str, Product] = {}
@@ -35,74 +175,16 @@ class FakeDataStore:
         self._seed()
 
     def _seed(self) -> None:
-        products = [
-            Product(id="1", name="Gemma Plush", price_cents=1999, inventory_count=50, tags=["demo", "plush"]),
-            Product(id="2", name="MCP Card Deck", price_cents=2499, inventory_count=25, tags=["demo", "cards"]),
-        ]
-        self._products = {p.id: p for p in products}
+        self._products, self._orders = load_catalog_for_settings()
 
-        now = time.time()
-        # Past demo orders (FGA off: everyone sees all; FGA on: only if can_read, e.g. owner tuple for buyer_sub).
-        self._orders = {
-            "seed-1": Order(
-                id="seed-1",
-                product_id="1",
-                buyer_sub="auth0|other-user",
-                status="created",
-                quantity=1,
-                total_cents=1999,
-                created_at=now - 86400 * 45,
-                company="Cobalt Freight & Logistics",
-                buyer_email="marisol.vega@cobaltfreight.example",
-            ),
-            "seed-2": Order(
-                id="seed-2",
-                product_id="2",
-                buyer_sub="auth0|other-user",
-                status="cancelled",
-                quantity=2,
-                total_cents=4998,
-                created_at=now - 86400 * 30,
-                company="Cobalt Freight & Logistics",
-                buyer_email="derrick.poole@cobaltfreight.example",
-            ),
-            "seed-3": Order(
-                id="seed-3",
-                product_id="1",
-                buyer_sub="auth0|other-user",
-                status="created",
-                quantity=3,
-                total_cents=5997,
-                created_at=now - 86400 * 14,
-                company="Northwind Data Labs",
-                buyer_email="yuki.tan@northwindlabs.example",
-            ),
-            "seed-4": Order(
-                id="seed-4",
-                product_id="2",
-                buyer_sub="auth0|demo-colleague",
-                status="created",
-                quantity=1,
-                total_cents=2499,
-                created_at=now - 86400 * 7,
-                company="Harborline Retail Group",
-                buyer_email="amara.okonkwo@harborline.example",
-            ),
-            "seed-5": Order(
-                id="seed-5",
-                product_id="1",
-                buyer_sub="auth0|demo-colleague",
-                status="created",
-                quantity=1,
-                total_cents=1999,
-                created_at=now - 86400 * 2,
-                company="Summit Circuit Supply",
-                buyer_email="james.rutherford@summitcircuit.example",
-            ),
-        }
+    def list_products(self, limit: int | None = None) -> list[dict]:
+        rows = [asdict(p) for p in self._products.values()]
+        if limit is not None:
+            rows = rows[: max(0, limit)]
+        return rows
 
-    def list_products(self) -> list[dict]:
-        return [asdict(p) for p in self._products.values()]
+    def product_total_count(self) -> int:
+        return len(self._products)
 
     def get_product(self, product_id: str) -> dict | None:
         p = self._products.get(product_id)
@@ -178,4 +260,3 @@ class FakeDataStore:
 
 
 fake_data = FakeDataStore()
-

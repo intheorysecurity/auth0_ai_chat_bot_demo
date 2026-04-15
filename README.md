@@ -144,7 +144,7 @@ openssl rand -hex 32
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -184,7 +184,7 @@ This starts the backend (port 8000), frontend (port 3000), and an Ollama instanc
 
 ### Simulated commerce API & agent tools
 
-The backend exposes a fake **products / orders** API under `/api/data/*` and registers tools such as `list_products`, `get_product`, `list_orders`, `get_order`, `create_order`, and `cancel_order`. Seeded **past orders** include **company** and **buyer email** (demo data); new orders use the signed-in user’s email when present, optional **`company`** on `POST /api/data/orders`, or a generated placeholder email if missing. **FGA off:** all orders are listed/visible. **FGA on:** list/get enforce **`can_read`**; create writes **`owner`**; cancel checks **`can_write`**. The `check_permission` tool runs arbitrary FGA checks for demos.
+The backend exposes a fake **products / orders** API under `/api/data/*` and registers tools such as `list_products`, `get_product`, `list_orders`, `get_order`, `create_order`, and `cancel_order`. **Products** are loaded at startup from **`PRODUCT_CATALOG_URL`** (default **`https://fakestoreapi.com/products`**). **`GET /api/data/products`** and the **`list_products`** tool return a **limited** slice by default (**`PRODUCT_LIST_DEFAULT_LIMIT`**, capped by **`PRODUCT_LIST_MAX_LIMIT`**); pass **`limit`** to request more (up to the cap). Optional **seed orders** live in **`backend/app/data/catalogs/seed_orders.json`** if you add that file. See [`backend/app/data/catalogs/README.md`](backend/app/data/catalogs/README.md). New orders use the signed-in user’s email when present, optional **`company`** on `POST /api/data/orders`, or a generated placeholder email if missing. **FGA off:** all orders are listed/visible. **FGA on:** list/get enforce **`can_read`**; create writes **`owner`**; cancel checks **`can_write`**. The `check_permission` tool runs arbitrary FGA checks for demos.
 
 ### Conversation history
 
@@ -275,6 +275,7 @@ For high-value simulated purchases, the backend can start **Auth0 CIBA** (if you
 | CORS origin | `backend/.env` `FRONTEND_URL` | Change if frontend runs on a different port/host |
 | Swap to Okta | `backend/.env` set `AUTH_PROVIDER=okta` | Also set `OKTA_ISSUER` and `OKTA_AUDIENCE` |
 | FGA model | `fga/sample-model/` | Copy `authorization-model.fga` into your FGA store; set `FGA_*` env vars |
+| Demo product catalog | `backend/.env` `PRODUCT_CATALOG_URL` | Default Fake Store API; optional [`seed_orders.json`](backend/app/data/catalogs/README.md) |
 | Conversation DB | `backend/.env` `DATABASE_URL` | Default SQLite file `app.db` under `backend/` |
 
 ---
@@ -293,7 +294,7 @@ ai_chat_bot/
 │   │   ├── llm/              # LLM providers + /api/llm/*/models helpers
 │   │   ├── chat/             # Chat service + SSE streaming endpoint
 │   │   ├── conversations/    # SQLite CRUD for chat history
-│   │   ├── data/             # Simulated products/orders API + FGA hooks
+│   │   ├── data/             # Simulated products/orders API + FGA hooks + optional seed_orders.json
 │   │   ├── fga/              # OpenFGA / Auth0 FGA HTTP client
 │   │   ├── ciba/             # Optional Auth0 CIBA step-up
 │   │   ├── mcp_client/       # MCP server connections + OAuth
@@ -311,14 +312,13 @@ ai_chat_bot/
 │   │   └── middleware.ts     # Auth0 middleware
 │   └── Dockerfile
 ├── docker-compose.yml
-├── docs/                     # Extra documentation + image placeholders
+├── docs/                     # Extra documentation + screenshot placeholders
 │   ├── ARCHITECTURE.md
 │   ├── DEVELOPMENT.md
 │   ├── API-OVERVIEW.md
 │   ├── SCREENSHOTS.md
 │   └── images/
-│       ├── placeholder.svg   # Generic doc image until you add PNGs
-│       └── README.md
+│       └── placeholder.svg   # Generic doc image until you add PNGs
 ├── CONTRIBUTING.md
 ├── SECURITY.md
 ├── CODE_OF_CONDUCT.md

@@ -15,7 +15,7 @@ cp frontend/.env.local.example frontend/.env.local
 # Edit both files with your Auth0 app, API identifier, and keys.
 
 cd backend && python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
 uvicorn app.main:app --reload --port 8000
 
 cd ../frontend && npm install && npm run dev

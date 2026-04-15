@@ -1,12 +1,18 @@
 import { getAuthedJson } from "@/lib/api";
 
+/** Must stay in sync with backend `product_list_max_limit` (request all SKUs for name lookup). */
+const PRODUCTS_FETCH_LIMIT = 20;
+
 /**
  * Deterministic orders table for simple "show my orders" prompts (skips LLM + tool spam).
  */
 export async function fetchOrdersListMarkdown(accessToken: string): Promise<string> {
   const [ordRes, prodRes] = await Promise.all([
     getAuthedJson<{ orders: Record<string, unknown>[] }>("/api/data/orders", accessToken),
-    getAuthedJson<{ products: { id: string; name: string }[] }>("/api/data/products", accessToken),
+    getAuthedJson<{ products: { id: string; name: string }[] }>(
+      `/api/data/products?limit=${PRODUCTS_FETCH_LIMIT}`,
+      accessToken
+    ),
   ]);
 
   const nameById = new Map(

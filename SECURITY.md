@@ -20,4 +20,4 @@ Include:
 
 ## Dependency updates
 
-Keep `backend/requirements.txt` and `frontend/package.json` dependencies reasonably current; review changelogs for breaking security fixes.
+Keep `backend/pyproject.toml` and `frontend/package.json` dependencies reasonably current; review changelogs for breaking security fixes.

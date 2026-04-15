@@ -46,6 +46,12 @@ class Settings(BaseSettings):
 
     # App
     frontend_url: str = "http://localhost:3000"
+    # Simulated store: GET this URL at startup; must return a JSON array of products
+    # (default: Fake Store API). Optional seed orders: app/data/catalogs/seed_orders.json
+    product_catalog_url: str = "https://fakestoreapi.com/products"
+    # Cap list responses (HTTP GET /api/data/products + list_products tool default)
+    product_list_default_limit: int = 8
+    product_list_max_limit: int = 20
 
     model_config = {"env_file": str(_ENV_FILE), "env_file_encoding": "utf-8"}
 
